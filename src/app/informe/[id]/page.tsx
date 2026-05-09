@@ -2,6 +2,9 @@ import SourceLink from "@/components/SourceLink";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { collections } from "@/lib/firebase/admin";
+
+export const dynamic = "force-dynamic";
 
 interface InformeDetail {
   id: string;
@@ -26,14 +29,45 @@ interface InformeDetail {
 }
 
 async function getInforme(id: string): Promise<InformeDetail | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/informes/${id}`, {
-      cache: "no-store",
+    const informeDoc = await collections.informes().doc(id).get();
+    if (!informeDoc.exists) return null;
+
+    const data = informeDoc.data()!;
+
+    // Get post from subcollection
+    const postSnap = await collections.posts(id).limit(1).get();
+    const post = postSnap.empty ? null : postSnap.docs[0].data();
+
+    // Get PDFs from subcollection
+    const pdfsSnap = await collections.pdfs(id).get();
+    const pdfs = pdfsSnap.docs.map((doc) => {
+      const d = doc.data();
+      return { url: d.url, nomeArquivo: d.nomeArquivo };
     });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
+
+    return {
+      id: informeDoc.id,
+      numero: data.numero,
+      titulo: data.titulo,
+      dataPublicacao: data.dataPublicacao || null,
+      urlOriginal: data.urlOriginal,
+      conteudoOriginal: data.conteudoOriginal || null,
+      conteudoSimplificado: data.conteudoSimplificado || null,
+      relevancia: data.relevancia || null,
+      tags: data.tags || [],
+      createdAt: data.createdAt,
+      post: post
+        ? {
+            titulo: post.titulo,
+            resumo: post.resumo || null,
+            conteudo: post.conteudo,
+          }
+        : null,
+      pdfs,
+    };
+  } catch (err) {
+    console.error("Error fetching informe:", err);
     return null;
   }
 }

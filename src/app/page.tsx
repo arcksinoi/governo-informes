@@ -1,5 +1,8 @@
 import InformeCard from "@/components/InformeCard";
 import Link from "next/link";
+import { collections } from "@/lib/firebase/admin";
+
+export const dynamic = "force-dynamic";
 
 interface InformeData {
   id: string;
@@ -18,27 +21,82 @@ interface InformeData {
 }
 
 async function getInformes(): Promise<InformeData[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/informes?limit=20`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.informes || [];
-  } catch {
+    const snapshot = await collections
+      .informes()
+      .orderBy("createdAt", "desc")
+      .limit(20)
+      .get();
+
+    const informes = await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const data = doc.data();
+
+        // Get post from subcollection
+        const postSnap = await collections.posts(doc.id).limit(1).get();
+        const post = postSnap.empty ? null : postSnap.docs[0].data();
+
+        return {
+          id: doc.id,
+          numero: data.numero,
+          titulo: data.titulo,
+          dataPublicacao: data.dataPublicacao || null,
+          urlOriginal: data.urlOriginal,
+          relevancia: data.relevancia || null,
+          tags: data.tags || [],
+          createdAt: data.createdAt,
+          post: post
+            ? {
+                titulo: post.titulo,
+                resumo: post.resumo || null,
+                conteudo: post.conteudo,
+              }
+            : null,
+        };
+      })
+    );
+
+    return informes;
+  } catch (err) {
+    console.error("Error fetching informes:", err);
     return [];
   }
 }
 
 async function getCrasStatus() {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/informes/cras-status`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return await res.json();
+    const statusSnap = await collections
+      .crasStatus()
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+
+    if (statusSnap.empty) return null;
+
+    const data = statusSnap.docs[0].data();
+    const sistemasAtivos: string[] = data.sistemasAtivos || [];
+    const sistemasInativos: string[] = data.sistemasInativos || [];
+
+    let status: string;
+    let mensagem: string;
+
+    if (sistemasInativos.length === 0 && sistemasAtivos.length > 0) {
+      status = "pode_ir";
+      mensagem =
+        "Pode ir sim, compadre! Os sistemas tao funcionando direitinho.";
+    } else if (sistemasInativos.length > 0 && sistemasAtivos.length === 0) {
+      status = "nao_ir";
+      mensagem = `Eita, melhor nao ir hoje nao, viu? Os sistemas (${sistemasInativos.join(", ")}) tao fora do ar.`;
+    } else if (sistemasInativos.length > 0) {
+      status = "cautela";
+      mensagem = `Oxe, cuidado! Alguns sistemas tao com problema: ${sistemasInativos.join(", ")}. Mas ${sistemasAtivos.join(", ")} tao funcionando. Melhor ligar pro CRAS antes de ir.`;
+    } else {
+      status = "sem_dados";
+      mensagem =
+        "Num tenho certeza se ta tudo funcionando. Melhor ligar pro seu CRAS antes de ir, viu?";
+    }
+
+    return { status, mensagem };
   } catch {
     return null;
   }
@@ -146,7 +204,7 @@ export default async function HomePage() {
               <strong className="text-gray-800">Coleta</strong>
               <p>
                 O sistema busca automaticamente novos informes no site oficial
-                do MDS (gov.br) varias vezes ao dia.
+                do MDS (gov.br) diariamente.
               </p>
             </div>
           </div>

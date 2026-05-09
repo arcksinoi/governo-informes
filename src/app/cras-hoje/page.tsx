@@ -1,4 +1,5 @@
 import CrasStatusComponent from "@/components/CrasStatus";
+import { collections } from "@/lib/firebase/admin";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,35 +8,76 @@ export const metadata: Metadata = {
     "Verifique se os sistemas do CRAS estao funcionando antes de sair de casa. Informacao atualizada do Cadastro Unico.",
 };
 
+export const dynamic = "force-dynamic";
+
 async function getCrasStatus() {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/informes/cras-status`, {
-      cache: "no-store",
-    });
-    if (!res.ok) {
+    const today = new Date().toISOString().split("T")[0];
+
+    const statusSnap = await collections
+      .crasStatus()
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+
+    if (statusSnap.empty) {
       return {
         status: "sem_dados" as const,
         mensagem:
-          "Num conseguimos verificar os sistemas agora. Melhor ligar pro CRAS antes de ir, viu?",
-        data: new Date().toISOString().split("T")[0],
-        sistemasAtivos: [],
-        sistemasInativos: [],
+          "Ainda nao temos dados sobre o funcionamento dos sistemas hoje. Consulte seu CRAS diretamente.",
+        data: today,
+        sistemasAtivos: [] as string[],
+        sistemasInativos: [] as string[],
         motivoInatividade: null,
         observacoes: null,
         fonteUrl: null,
         ultimaAtualizacao: null,
       };
     }
-    return await res.json();
-  } catch {
+
+    const latestStatus = statusSnap.docs[0].data();
+    const sistemasAtivos: string[] = latestStatus.sistemasAtivos || [];
+    const sistemasInativos: string[] = latestStatus.sistemasInativos || [];
+
+    let status: "pode_ir" | "nao_ir" | "cautela" | "sem_dados";
+    let mensagem: string;
+
+    if (sistemasInativos.length === 0 && sistemasAtivos.length > 0) {
+      status = "pode_ir";
+      mensagem =
+        "Pode ir sim, compadre! Os sistemas tao funcionando direitinho.";
+    } else if (sistemasInativos.length > 0 && sistemasAtivos.length === 0) {
+      status = "nao_ir";
+      mensagem = `Eita, melhor nao ir hoje nao, viu? Os sistemas (${sistemasInativos.join(", ")}) tao fora do ar.`;
+    } else if (sistemasInativos.length > 0) {
+      status = "cautela";
+      mensagem = `Oxe, cuidado! Alguns sistemas tao com problema: ${sistemasInativos.join(", ")}. Mas ${sistemasAtivos.join(", ")} tao funcionando. Melhor ligar pro CRAS antes de ir.`;
+    } else {
+      status = "sem_dados";
+      mensagem =
+        "Num tenho certeza se ta tudo funcionando. Melhor ligar pro seu CRAS antes de ir, viu?";
+    }
+
+    return {
+      status,
+      mensagem,
+      data: today,
+      sistemasAtivos,
+      sistemasInativos,
+      motivoInatividade: latestStatus.motivoInatividade || null,
+      observacoes: latestStatus.observacoes || null,
+      fonteUrl: latestStatus.fonteUrl || null,
+      ultimaAtualizacao: latestStatus.createdAt || null,
+    };
+  } catch (err) {
+    console.error("Error fetching CRAS status:", err);
     return {
       status: "sem_dados" as const,
       mensagem:
         "Eita, deu um problema pra buscar as informacoes. Tente novamente ou ligue pro seu CRAS.",
       data: new Date().toISOString().split("T")[0],
-      sistemasAtivos: [],
-      sistemasInativos: [],
+      sistemasAtivos: [] as string[],
+      sistemasInativos: [] as string[],
       motivoInatividade: null,
       observacoes: null,
       fonteUrl: null,
@@ -103,9 +145,8 @@ export default async function CrasHojePage() {
               Com que frequencia atualiza?
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              O sistema verifica novos informes varias vezes ao dia (de manha,
-              a tarde e a noite). Quando encontra algo novo, processa e atualiza
-              automaticamente.
+              O sistema verifica novos informes diariamente. Quando encontra algo
+              novo, processa e atualiza automaticamente.
             </p>
           </div>
           <div>
