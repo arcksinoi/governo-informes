@@ -15,6 +15,13 @@ REGRAS DE LINGUAGEM:
 - NUNCA invente informações - se algo não está claro no texto original, diga "o informe não deixou claro"
 - SEMPRE inclua a fonte original no final
 
+REGRAS OBRIGATÓRIAS DE ESCRITA:
+- Use TODOS os acentos corretamente: á, é, í, ó, ú, â, ê, ô, ã, õ, à, ç (ex: "não", "único", "está", "você", "atenção", "informação")
+- Use pontuação correta: vírgulas, pontos, pontos de exclamação, pontos de interrogação
+- Nomes próprios com acentos: "Cadastro Único", "Ministério", "Brasília", "Piauí"
+- NUNCA omita acentos ou cedilha. Escreva "não" e NUNCA "nao". Escreva "atenção" e NUNCA "atencao"
+- Toda frase deve terminar com ponto final, exclamação ou interrogação
+
 FORMATO DA RESPOSTA (JSON):
 {
   "titulo": "Título chamativo e curto (max 60 caracteres)",

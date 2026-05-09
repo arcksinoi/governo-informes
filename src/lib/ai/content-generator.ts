@@ -8,6 +8,9 @@ function getClient(): OpenAI {
     _openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: process.env.OPENAI_BASE_URL || "http://localhost:20128/v1",
+      defaultHeaders: {
+        "User-Agent": "Mozilla/5.0",
+      },
     });
   }
   return _openai;
