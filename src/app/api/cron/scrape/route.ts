@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { getDb, collections } from "@/lib/firebase/admin";
 import { scrapeInformesList, extractPdfLinks } from "@/lib/scraper/mds-scraper";
 import { downloadAndParsePdf, extractOperationalCalendar } from "@/lib/scraper/pdf-downloader";
 import { generateSimplifiedContent, analyzeCrasStatus } from "@/lib/ai/content-generator";
 import { sendInformeNotification } from "@/lib/notifications/email";
-import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 export const dynamic = "force-dynamic";
@@ -46,13 +45,13 @@ export async function GET(request: Request) {
     for (const informe of latestInformes) {
       try {
         // Check if already in database
-        const existing = db
-          .select()
-          .from(schema.informes)
-          .where(eq(schema.informes.numero, informe.numero))
+        const existingSnap = await collections
+          .informes()
+          .where("numero", "==", informe.numero)
+          .limit(1)
           .get();
 
-        if (existing) {
+        if (!existingSnap.empty) {
           console.log(`[CRON] Informe ${informe.numero} already processed, skipping`);
           continue;
         }
@@ -66,7 +65,7 @@ export async function GET(request: Request) {
 
         const informeId = uuidv4();
 
-        // Collect PDF data first, save to DB after informe is inserted (FK constraint)
+        // Collect PDF data
         const pdfRecords: Array<{
           id: string;
           url: string;
@@ -79,7 +78,7 @@ export async function GET(request: Request) {
 
         for (const pdf of pdfLinks.slice(0, 3)) {
           try {
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // Rate limit
+            await new Promise((resolve) => setTimeout(resolve, 2000));
             const { filePath, text } = await downloadAndParsePdf(pdf.url, pdf.nomeArquivo);
 
             pdfRecords.push({
@@ -108,24 +107,33 @@ export async function GET(request: Request) {
           }
         }
 
+        const now = new Date().toISOString();
+
         if (!fullText.trim()) {
           console.warn(`[CRON] No text extracted for ${informe.numero}`);
           // Save informe without content
-          db.insert(schema.informes).values({
-            id: informeId,
+          const batch = getDb().batch();
+
+          batch.set(collections.informes().doc(informeId), {
             numero: informe.numero,
             titulo: informe.titulo,
             dataPublicacao: informe.dataPublicacao || null,
             urlOriginal: informe.url,
             conteudoOriginal: "",
             relevancia: "baixa",
-            tags: "[]",
-          }).run();
+            tags: [],
+            createdAt: now,
+            updatedAt: now,
+          });
 
-          // Now save PDF records (after informe exists)
           for (const rec of pdfRecords) {
-            db.insert(schema.pdfs).values({ ...rec, informeId }).run();
+            batch.set(collections.pdfs(informeId).doc(rec.id), {
+              ...rec,
+              createdAt: now,
+            });
           }
+
+          await batch.commit();
           continue;
         }
 
@@ -139,27 +147,35 @@ export async function GET(request: Request) {
           results.errors.push(errMsg);
 
           // Save informe with original text only
-          db.insert(schema.informes).values({
-            id: informeId,
+          const batch = getDb().batch();
+
+          batch.set(collections.informes().doc(informeId), {
             numero: informe.numero,
             titulo: informe.titulo,
             dataPublicacao: informe.dataPublicacao || null,
             urlOriginal: informe.url,
             conteudoOriginal: fullText.slice(0, 50000),
             relevancia: "media",
-            tags: "[]",
-          }).run();
+            tags: [],
+            createdAt: now,
+            updatedAt: now,
+          });
 
-          // Save PDF records after informe
           for (const rec of pdfRecords) {
-            db.insert(schema.pdfs).values({ ...rec, informeId }).run();
+            batch.set(collections.pdfs(informeId).doc(rec.id), {
+              ...rec,
+              createdAt: now,
+            });
           }
+
+          await batch.commit();
           continue;
         }
 
-        // Step 5: Save informe to database (BEFORE PDFs due to FK constraint)
-        db.insert(schema.informes).values({
-          id: informeId,
+        // Step 5: Save informe + post + PDFs in a batch
+        const batch = getDb().batch();
+
+        batch.set(collections.informes().doc(informeId), {
           numero: informe.numero,
           titulo: informe.titulo,
           dataPublicacao: informe.dataPublicacao || null,
@@ -167,23 +183,30 @@ export async function GET(request: Request) {
           conteudoOriginal: fullText.slice(0, 50000),
           conteudoSimplificado: generated.conteudo,
           relevancia: generated.relevancia,
-          tags: JSON.stringify(generated.tags),
-        }).run();
+          tags: generated.tags,
+          createdAt: now,
+          updatedAt: now,
+        });
 
-        // Save PDF records after informe exists
-        for (const rec of pdfRecords) {
-          db.insert(schema.pdfs).values({ ...rec, informeId }).run();
-        }
-
-        // Step 6: Create post
-        db.insert(schema.posts).values({
-          id: uuidv4(),
-          informeId,
+        // Post as subcollection
+        const postId = uuidv4();
+        batch.set(collections.posts(informeId).doc(postId), {
           titulo: generated.titulo,
           conteudo: generated.conteudo,
           resumo: generated.resumo,
           publicado: true,
-        }).run();
+          createdAt: now,
+        });
+
+        // PDFs as subcollection
+        for (const rec of pdfRecords) {
+          batch.set(collections.pdfs(informeId).doc(rec.id), {
+            ...rec,
+            createdAt: now,
+          });
+        }
+
+        await batch.commit();
         results.postsGenerated++;
 
         // Step 7: Analyze CRAS status if relevant
@@ -197,21 +220,23 @@ export async function GET(request: Request) {
             const calendarData = extractOperationalCalendar(fullText);
 
             const today = new Date().toISOString().split("T")[0];
-            db.insert(schema.crasStatus).values({
-              id: uuidv4(),
+            const crasId = uuidv4();
+
+            await collections.crasStatus().doc(crasId).set({
               data: today,
-              sistemasAtivos: JSON.stringify([
+              sistemasAtivos: [
                 ...new Set([...crasAnalysis.sistemasAtivos, ...calendarData.sistemasAtivos]),
-              ]),
-              sistemasInativos: JSON.stringify([
+              ],
+              sistemasInativos: [
                 ...new Set([...crasAnalysis.sistemasInativos, ...calendarData.sistemasInativos]),
-              ]),
+              ],
               motivoInatividade:
                 crasAnalysis.motivoInatividade || calendarData.motivoInatividade,
               observacoes: crasAnalysis.observacoes,
               fonteInformeId: informeId,
               fonteUrl: informe.url,
-            }).run();
+              createdAt: now,
+            });
           } catch (crasErr) {
             console.error(`[CRON] CRAS analysis failed: ${crasErr}`);
             results.errors.push(`CRAS analysis failed: ${crasErr}`);

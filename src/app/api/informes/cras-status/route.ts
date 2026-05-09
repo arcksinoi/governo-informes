@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
-import { desc } from "drizzle-orm";
+import { collections } from "@/lib/firebase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +11,13 @@ export async function GET() {
     const today = new Date().toISOString().split("T")[0];
 
     // Get latest CRAS status
-    const latestStatus = db
-      .select()
-      .from(schema.crasStatus)
-      .orderBy(desc(schema.crasStatus.createdAt))
+    const statusSnap = await collections
+      .crasStatus()
+      .orderBy("createdAt", "desc")
       .limit(1)
       .get();
 
-    if (!latestStatus) {
+    if (statusSnap.empty) {
       return NextResponse.json({
         status: "sem_dados",
         mensagem:
@@ -34,12 +32,10 @@ export async function GET() {
       });
     }
 
-    const sistemasAtivos = latestStatus.sistemasAtivos
-      ? JSON.parse(latestStatus.sistemasAtivos)
-      : [];
-    const sistemasInativos = latestStatus.sistemasInativos
-      ? JSON.parse(latestStatus.sistemasInativos)
-      : [];
+    const latestStatus = statusSnap.docs[0].data();
+
+    const sistemasAtivos: string[] = latestStatus.sistemasAtivos || [];
+    const sistemasInativos: string[] = latestStatus.sistemasInativos || [];
 
     let status: "pode_ir" | "nao_ir" | "cautela" | "sem_dados";
     let mensagem: string;
@@ -66,10 +62,10 @@ export async function GET() {
       data: today,
       sistemasAtivos,
       sistemasInativos,
-      motivoInatividade: latestStatus.motivoInatividade,
-      observacoes: latestStatus.observacoes,
-      fonteUrl: latestStatus.fonteUrl,
-      ultimaAtualizacao: latestStatus.createdAt,
+      motivoInatividade: latestStatus.motivoInatividade || null,
+      observacoes: latestStatus.observacoes || null,
+      fonteUrl: latestStatus.fonteUrl || null,
+      ultimaAtualizacao: latestStatus.createdAt || null,
     });
   } catch (err) {
     console.error("Error getting CRAS status:", err);

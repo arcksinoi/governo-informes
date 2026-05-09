@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { collections } from "@/lib/firebase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -14,37 +13,43 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const informe = db
-      .select()
-      .from(schema.informes)
-      .where(eq(schema.informes.id, id))
-      .get();
+    const informeDoc = await collections.informes().doc(id).get();
 
-    if (!informe) {
+    if (!informeDoc.exists) {
       return NextResponse.json(
         { error: "Informe nao encontrado" },
         { status: 404 }
       );
     }
 
-    const post = db
-      .select()
-      .from(schema.posts)
-      .where(eq(schema.posts.informeId, id))
-      .get();
+    const informe = informeDoc.data()!;
 
-    const pdfs = db
-      .select({
-        url: schema.pdfs.url,
-        nomeArquivo: schema.pdfs.nomeArquivo,
-      })
-      .from(schema.pdfs)
-      .where(eq(schema.pdfs.informeId, id))
-      .all();
+    // Get post from subcollection
+    const postSnap = await collections.posts(id).limit(1).get();
+    const post = postSnap.empty ? null : postSnap.docs[0].data();
+
+    // Get PDFs from subcollection
+    const pdfsSnap = await collections.pdfs(id).get();
+    const pdfs = pdfsSnap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        url: data.url,
+        nomeArquivo: data.nomeArquivo,
+      };
+    });
 
     return NextResponse.json({
-      ...informe,
-      tags: informe.tags ? JSON.parse(informe.tags) : [],
+      id: informeDoc.id,
+      numero: informe.numero,
+      titulo: informe.titulo,
+      dataPublicacao: informe.dataPublicacao || null,
+      urlOriginal: informe.urlOriginal,
+      conteudoOriginal: informe.conteudoOriginal,
+      conteudoSimplificado: informe.conteudoSimplificado || null,
+      relevancia: informe.relevancia,
+      tags: informe.tags || [],
+      createdAt: informe.createdAt,
+      updatedAt: informe.updatedAt,
       post: post
         ? {
             titulo: post.titulo,

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
-import { desc, eq } from "drizzle-orm";
+import { collections } from "@/lib/firebase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -13,47 +12,53 @@ export async function GET(request: Request) {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "10");
   const relevancia = searchParams.get("relevancia");
-  const offset = (page - 1) * limit;
 
   try {
-    let query = db
-      .select({
-        id: schema.informes.id,
-        numero: schema.informes.numero,
-        titulo: schema.informes.titulo,
-        dataPublicacao: schema.informes.dataPublicacao,
-        urlOriginal: schema.informes.urlOriginal,
-        relevancia: schema.informes.relevancia,
-        tags: schema.informes.tags,
-        createdAt: schema.informes.createdAt,
+    let query = collections
+      .informes()
+      .orderBy("createdAt", "desc")
+      .limit(limit);
+
+    // Firestore offset (skips documents — works but charges for skipped reads)
+    if (page > 1) {
+      query = query.offset((page - 1) * limit);
+    }
+
+    const snapshot = await query.get();
+
+    const informesWithPosts = await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const informe = doc.data();
+
+        // Get post from subcollection
+        const postSnap = await collections
+          .posts(doc.id)
+          .limit(1)
+          .get();
+
+        const post = postSnap.empty
+          ? null
+          : postSnap.docs[0].data();
+
+        return {
+          id: doc.id,
+          numero: informe.numero,
+          titulo: informe.titulo,
+          dataPublicacao: informe.dataPublicacao || null,
+          urlOriginal: informe.urlOriginal,
+          relevancia: informe.relevancia,
+          tags: informe.tags || [],
+          createdAt: informe.createdAt,
+          post: post
+            ? {
+                titulo: post.titulo,
+                resumo: post.resumo,
+                conteudo: post.conteudo,
+              }
+            : null,
+        };
       })
-      .from(schema.informes)
-      .orderBy(desc(schema.informes.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const informes = query.all();
-
-    // Get posts for each informe
-    const informesWithPosts = informes.map((informe) => {
-      const post = db
-        .select()
-        .from(schema.posts)
-        .where(eq(schema.posts.informeId, informe.id))
-        .get();
-
-      return {
-        ...informe,
-        tags: informe.tags ? JSON.parse(informe.tags) : [],
-        post: post
-          ? {
-              titulo: post.titulo,
-              resumo: post.resumo,
-              conteudo: post.conteudo,
-            }
-          : null,
-      };
-    });
+    );
 
     // Filter by relevancia if specified
     const filtered = relevancia

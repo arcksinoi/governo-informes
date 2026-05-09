@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: ".",
   },
-  serverExternalPackages: ["better-sqlite3", "pdf-parse"],
+  serverExternalPackages: ["pdf-parse"],
 };
 
 export default nextConfig;
