@@ -83,17 +83,18 @@ async function getCrasStatus() {
     if (sistemasInativos.length === 0 && sistemasAtivos.length > 0) {
       status = "pode_ir";
       mensagem =
-        "Pode ir sim, compadre! Os sistemas tao funcionando direitinho.";
+        "Ta tudo funcionando! Pode ir ao CRAS resolver o que precisar.";
     } else if (sistemasInativos.length > 0 && sistemasAtivos.length === 0) {
       status = "nao_ir";
-      mensagem = `Eita, melhor nao ir hoje nao, viu? Os sistemas (${sistemasInativos.join(", ")}) tao fora do ar.`;
+      mensagem =
+        "Os sistemas do CadUnico estao fora do ar hoje. Melhor ir outro dia.";
     } else if (sistemasInativos.length > 0) {
       status = "cautela";
-      mensagem = `Oxe, cuidado! Alguns sistemas tao com problema: ${sistemasInativos.join(", ")}. Mas ${sistemasAtivos.join(", ")} tao funcionando. Melhor ligar pro CRAS antes de ir.`;
+      mensagem =
+        "Alguns sistemas estao com problema. Ligue pro CRAS antes de ir.";
     } else {
       status = "sem_dados";
-      mensagem =
-        "Num tenho certeza se ta tudo funcionando. Melhor ligar pro seu CRAS antes de ir, viu?";
+      mensagem = "Nao temos certeza se esta tudo funcionando. Ligue pro CRAS.";
     }
 
     return { status, mensagem };
@@ -109,55 +110,63 @@ export default async function HomePage() {
   ]);
 
   const crasStatusColor: Record<string, string> = {
-    pode_ir: "bg-green-100 border-green-300 text-green-800",
-    nao_ir: "bg-red-100 border-red-300 text-red-800",
-    cautela: "bg-amber-100 border-amber-300 text-amber-800",
-    sem_dados: "bg-gray-100 border-gray-300 text-gray-600",
+    pode_ir: "bg-green-50 border-green-300 text-green-800",
+    nao_ir: "bg-red-50 border-red-300 text-red-800",
+    cautela: "bg-amber-50 border-amber-300 text-amber-800",
+    sem_dados: "bg-gray-50 border-gray-300 text-gray-600",
+  };
+
+  const crasEmoji: Record<string, string> = {
+    pode_ir: "✅",
+    nao_ir: "❌",
+    cautela: "⚠️",
+    sem_dados: "❓",
   };
 
   return (
-    <div className="space-y-8">
-      {/* Hero Section */}
-      <section className="text-center py-6">
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">
-          Informes do CadUnico
+    <div className="space-y-6 sm:space-y-8">
+      {/* Titulo - simples e direto */}
+      <section className="text-center py-4 sm:py-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          Novidades do CadUnico
         </h1>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
-          Aqui a gente traduz os informes do governo pra uma linguagem que todo
-          mundo entende. Sem enrolacao, direto ao ponto.
+        <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">
+          Aqui a gente pega as informacoes do governo e explica de um jeito
+          facil de entender. Tudo sobre o Cadastro Unico e programas sociais.
         </p>
       </section>
 
-      {/* CRAS Quick Status */}
+      {/* CRAS - botao grande e claro */}
       {crasStatus && (
-        <Link href="/cras-hoje" className="block">
+        <Link href="/cras-hoje" className="block min-h-0">
           <div
-            className={`rounded-xl border-2 p-5 flex flex-col sm:flex-row items-center gap-4 hover:shadow-md transition-shadow ${
+            className={`rounded-xl border-2 p-4 sm:p-5 flex items-center gap-4 hover:shadow-md active:shadow-sm transition-shadow ${
               crasStatusColor[crasStatus.status] || crasStatusColor.sem_dados
             }`}
           >
-            <div className="text-4xl">
-              {crasStatus.status === "pode_ir" && "✅"}
-              {crasStatus.status === "nao_ir" && "❌"}
-              {crasStatus.status === "cautela" && "⚠️"}
-              {crasStatus.status === "sem_dados" && "❓"}
+            <div className="text-3xl sm:text-4xl flex-shrink-0">
+              {crasEmoji[crasStatus.status] || "❓"}
             </div>
-            <div className="text-center sm:text-left flex-1">
-              <h2 className="font-bold text-lg">Ir no CRAS hoje?</h2>
-              <p className="text-sm mt-0.5">{crasStatus.mensagem}</p>
+            <div className="flex-1 min-w-0">
+              <h2 className="font-bold text-base sm:text-lg">
+                Posso ir no CRAS hoje?
+              </h2>
+              <p className="text-xs sm:text-sm mt-0.5 leading-relaxed">
+                {crasStatus.mensagem}
+              </p>
             </div>
-            <span className="text-sm font-medium opacity-70">
-              Ver detalhes &rarr;
+            <span className="text-sm font-medium opacity-70 flex-shrink-0 hidden sm:block">
+              Ver mais →
             </span>
           </div>
         </Link>
       )}
 
-      {/* Informes List */}
+      {/* Lista de informes */}
       {informes.length > 0 ? (
         <section>
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Ultimos Informes
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">
+            Ultimas noticias do CadUnico
           </h2>
           <div className="grid gap-4">
             {informes.map((informe) => (
@@ -177,54 +186,57 @@ export default async function HomePage() {
           </div>
         </section>
       ) : (
-        <section className="text-center py-16">
-          <div className="text-6xl mb-4">📋</div>
-          <h2 className="text-xl font-bold text-gray-700 mb-2">
-            Ainda sem informes
+        <section className="text-center py-12 sm:py-16">
+          <div className="text-5xl sm:text-6xl mb-4">📋</div>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-700 mb-2">
+            Ainda sem noticias
           </h2>
-          <p className="text-gray-500 max-w-md mx-auto">
-            O sistema ainda ta coletando as informacoes. Em breve vai aparecer
-            tudo aqui, bonitinho e facil de entender.
-          </p>
-          <p className="text-sm text-gray-400 mt-4">
-            O scraper roda automaticamente varias vezes ao dia.
+          <p className="text-gray-500 max-w-md mx-auto text-sm sm:text-base">
+            O sistema ainda ta buscando as informacoes. Em breve vai aparecer
+            tudo aqui.
           </p>
         </section>
       )}
 
-      {/* About Section */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 mt-8">
-        <h2 className="text-lg font-bold text-gray-800 mb-3">
-          Como funciona?
+      {/* Como funciona - linguagem super simples */}
+      <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-4">
+          Como funciona esse site?
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-600">
+        <div className="space-y-4 text-sm sm:text-base text-gray-600">
           <div className="flex gap-3">
-            <div className="text-2xl">🔍</div>
+            <div className="text-2xl flex-shrink-0">🔍</div>
             <div>
-              <strong className="text-gray-800">Coleta</strong>
-              <p>
-                O sistema busca automaticamente novos informes no site oficial
-                do MDS (gov.br) diariamente.
+              <strong className="text-gray-800 block mb-0.5">
+                1. A gente busca as informacoes
+              </strong>
+              <p className="leading-relaxed">
+                Todo dia o sistema vai no site oficial do governo e pega os
+                documentos novos sobre o CadUnico.
               </p>
             </div>
           </div>
           <div className="flex gap-3">
-            <div className="text-2xl">🤖</div>
+            <div className="text-2xl flex-shrink-0">📖</div>
             <div>
-              <strong className="text-gray-800">Simplifica</strong>
-              <p>
-                Uma inteligencia artificial le os PDFs e reescreve tudo em
-                linguagem simples, como a gente conversa no dia a dia.
+              <strong className="text-gray-800 block mb-0.5">
+                2. A gente traduz pra voce
+              </strong>
+              <p className="leading-relaxed">
+                Os documentos do governo sao complicados. A gente le tudo e
+                escreve de novo, de um jeito que qualquer pessoa entende.
               </p>
             </div>
           </div>
           <div className="flex gap-3">
-            <div className="text-2xl">📱</div>
+            <div className="text-2xl flex-shrink-0">📱</div>
             <div>
-              <strong className="text-gray-800">Informa</strong>
-              <p>
-                Voce recebe as informacoes mais importantes de um jeito facil
-                de ler, sempre com a fonte original.
+              <strong className="text-gray-800 block mb-0.5">
+                3. Voce fica sabendo de tudo
+              </strong>
+              <p className="leading-relaxed">
+                Aqui voce ve o que mudou, o que ta funcionando e o que pode
+                afetar o seu beneficio ou cadastro.
               </p>
             </div>
           </div>

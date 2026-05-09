@@ -1,11 +1,12 @@
 import CrasStatusComponent from "@/components/CrasStatus";
+import Link from "next/link";
 import { collections } from "@/lib/firebase/admin";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Ir no CRAS Hoje? - Compadre do CadUnico",
+  title: "Posso ir no CRAS hoje? - Compadre do CadUnico",
   description:
-    "Verifique se os sistemas do CRAS estao funcionando antes de sair de casa. Informacao atualizada do Cadastro Unico.",
+    "Descubra se o CRAS esta atendendo hoje antes de sair de casa. Informacao simples e direta.",
 };
 
 export const dynamic = "force-dynamic";
@@ -24,9 +25,8 @@ async function getCrasStatus() {
       return {
         status: "sem_dados" as const,
         mensagem:
-          "Ainda nao temos dados sobre o funcionamento dos sistemas hoje. Consulte seu CRAS diretamente.",
+          "Ainda nao temos informacoes sobre o CRAS hoje. Ligue pro CRAS da sua cidade pra saber se esta atendendo.",
         data: today,
-        sistemasAtivos: [] as string[],
         sistemasInativos: [] as string[],
         motivoInatividade: null,
         observacoes: null,
@@ -45,24 +45,25 @@ async function getCrasStatus() {
     if (sistemasInativos.length === 0 && sistemasAtivos.length > 0) {
       status = "pode_ir";
       mensagem =
-        "Pode ir sim, compadre! Os sistemas tao funcionando direitinho.";
+        "Ta tudo funcionando direitinho! Pode ir ao CRAS fazer seu cadastro ou resolver o que precisar do CadUnico.";
     } else if (sistemasInativos.length > 0 && sistemasAtivos.length === 0) {
       status = "nao_ir";
-      mensagem = `Eita, melhor nao ir hoje nao, viu? Os sistemas (${sistemasInativos.join(", ")}) tao fora do ar.`;
+      mensagem =
+        "Os sistemas que o CRAS usa pra mexer no CadUnico estao fora do ar hoje. Se voce precisa fazer cadastro, atualizar dados ou consultar beneficios, melhor ir outro dia.";
     } else if (sistemasInativos.length > 0) {
       status = "cautela";
-      mensagem = `Oxe, cuidado! Alguns sistemas tao com problema: ${sistemasInativos.join(", ")}. Mas ${sistemasAtivos.join(", ")} tao funcionando. Melhor ligar pro CRAS antes de ir.`;
+      mensagem =
+        "Alguns sistemas do CadUnico estao com problema. O CRAS pode nao conseguir fazer tudo que voce precisa hoje. Ligue antes pra confirmar.";
     } else {
       status = "sem_dados";
       mensagem =
-        "Num tenho certeza se ta tudo funcionando. Melhor ligar pro seu CRAS antes de ir, viu?";
+        "Nao temos certeza se esta tudo funcionando hoje. Melhor ligar pro CRAS da sua cidade antes de ir.";
     }
 
     return {
       status,
       mensagem,
       data: today,
-      sistemasAtivos,
       sistemasInativos,
       motivoInatividade: latestStatus.motivoInatividade || null,
       observacoes: latestStatus.observacoes || null,
@@ -74,9 +75,8 @@ async function getCrasStatus() {
     return {
       status: "sem_dados" as const,
       mensagem:
-        "Eita, deu um problema pra buscar as informacoes. Tente novamente ou ligue pro seu CRAS.",
+        "Nao conseguimos buscar as informacoes agora. Tente de novo mais tarde ou ligue pro CRAS da sua cidade.",
       data: new Date().toISOString().split("T")[0],
-      sistemasAtivos: [] as string[],
       sistemasInativos: [] as string[],
       motivoInatividade: null,
       observacoes: null,
@@ -91,13 +91,35 @@ export default async function CrasHojePage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Ir no CRAS Hoje?
+      {/* Voltar */}
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-green-700 mb-5 transition-colors"
+      >
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        Voltar pro inicio
+      </Link>
+
+      {/* Titulo simples */}
+      <div className="text-center mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          Posso ir no CRAS hoje?
         </h1>
-        <p className="text-gray-600">
-          Veja se os sistemas do Cadastro Unico tao funcionando antes de sair de
-          casa.
+        <p className="text-gray-600 text-sm sm:text-base">
+          Veja se o CRAS consegue resolver coisas do CadUnico hoje antes de
+          voce sair de casa.
         </p>
       </div>
 
@@ -105,7 +127,6 @@ export default async function CrasHojePage() {
         status={crasStatus.status}
         mensagem={crasStatus.mensagem}
         data={crasStatus.data}
-        sistemasAtivos={crasStatus.sistemasAtivos}
         sistemasInativos={crasStatus.sistemasInativos}
         motivoInatividade={crasStatus.motivoInatividade}
         observacoes={crasStatus.observacoes}
@@ -113,51 +134,52 @@ export default async function CrasHojePage() {
         ultimaAtualizacao={crasStatus.ultimaAtualizacao}
       />
 
-      {/* FAQ */}
-      <div className="mt-10 bg-white rounded-xl border border-gray-200 p-6">
+      {/* O que e o CRAS - explicacao simples */}
+      <div className="mt-8 bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-4">
-          Perguntas Frequentes
+          Entenda melhor
         </h2>
-        <div className="space-y-4 text-sm">
+        <div className="space-y-5 text-sm sm:text-base">
           <div>
-            <h3 className="font-semibold text-gray-700 mb-1">
-              De onde vem essas informacoes?
+            <h3 className="font-bold text-gray-700 mb-1.5">
+              🏢 O que e o CRAS?
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              Direto dos informes oficiais publicados pelo Ministerio do
-              Desenvolvimento Social (MDS) no site gov.br. A gente le os PDFs e
-              extrai as informacoes sobre o funcionamento dos sistemas.
+              O CRAS e o lugar onde voce vai pra se cadastrar no CadUnico,
+              atualizar seus dados e resolver coisas dos programas do governo,
+              como o Bolsa Familia. Toda cidade tem pelo menos um CRAS.
             </p>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-700 mb-1">
-              Posso confiar 100% nessa informacao?
+            <h3 className="font-bold text-gray-700 mb-1.5">
+              📋 O que e o CadUnico?
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              As informacoes sao extraidas automaticamente dos documentos
-              oficiais, mas cada CRAS pode ter suas particularidades. Se voce
-              tem duvida, <strong>sempre ligue pro CRAS da sua cidade</strong>{" "}
-              antes de ir.
+              O Cadastro Unico (CadUnico) e onde o governo guarda as
+              informacoes das familias que precisam de ajuda. Quem ta cadastrado
+              pode receber beneficios como Bolsa Familia, tarifa social de luz,
+              entre outros.
             </p>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-700 mb-1">
-              Com que frequencia atualiza?
+            <h3 className="font-bold text-gray-700 mb-1.5">
+              🖥️ Por que os sistemas importam?
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              O sistema verifica novos informes diariamente. Quando encontra algo
-              novo, processa e atualiza automaticamente.
+              Os funcionarios do CRAS usam computadores e sistemas pra fazer os
+              cadastros e consultas. Quando esses sistemas estao com problema, o
+              CRAS nao consegue mexer no CadUnico. Mas outros atendimentos da
+              assistencia social continuam normais.
             </p>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-700 mb-1">
-              O que sao esses sistemas (SIBEC, CECAD, etc)?
+            <h3 className="font-bold text-gray-700 mb-1.5">
+              🔄 Essa informacao ta atualizada?
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              Sao os sistemas que os funcionarios do CRAS usam pra fazer
-              cadastros e consultas. Quando eles estao fora do ar, o CRAS nao
-              consegue fazer varios servicos, entao pode nao valer a pena ir
-              naquele dia.
+              A gente atualiza todo dia com base nos informes oficiais do
+              governo. Mas cada cidade pode ter suas regras. Na duvida,{" "}
+              <strong>ligue pro CRAS antes de ir</strong>.
             </p>
           </div>
         </div>
